@@ -447,12 +447,6 @@ Please do not commit `.env` files, API keys, or credentials. For larger changes,
 
 ---
 
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
 ## Author
 
 <div align="center">
