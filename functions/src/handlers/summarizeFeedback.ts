@@ -14,6 +14,7 @@ export const summarizeFeedback = onDocumentCreated({
   if (!snapshot) return;
 
   const issueId = event.params.issueId;
+  console.log("Summarize trigger fired", issueId);
 
   // Check if we need to summarize (e.g. every 5th comment)
   const issueRef = db.collection('issues').doc(issueId);
@@ -22,7 +23,13 @@ export const summarizeFeedback = onDocumentCreated({
 
   if (!issue) return;
 
-  const commentCount = issue.commentCount || 0;
+  const commentsCountSnapshot = await issueRef
+    .collection("comments")
+    .count()
+    .get();
+
+  const commentCount = commentsCountSnapshot.data().count;
+  console.log("Comment count:", commentCount);
 
   // Only summarize every 5 comments to save AI calls
   if (commentCount === 0 || commentCount % 5 !== 0) return;
@@ -39,15 +46,20 @@ export const summarizeFeedback = onDocumentCreated({
   Respond with a single concise paragraph summarizing resident sentiment and key urgency signals.`;
 
   try {
+    console.log("Calling Gemini...");
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3.5-flash',
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
+    console.log("Gemini response received");
+    console.log(response.text);
 
     if (response.text) {
+      console.log("Updating Firestore...");
       await issueRef.update({ feedbackSummary: response.text });
+      console.log("Feedback summary saved successfully.");
     }
   } catch (err) {
-    console.error('Summarization failed', err);
+    console.error("Summarization failed:", err);
   }
 });

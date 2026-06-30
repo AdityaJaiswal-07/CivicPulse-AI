@@ -28,6 +28,9 @@ export interface AIAnalysis {
   suggestedCommittee: string;
   temporaryActions: string[];
   actionPlan: ActionPlanStep[];
+  estimatedCost?: string;
+  estimatedResolutionTime?: string;
+  reasoning?: string;
   nextSteps: string;
   analysisStatus: AnalysisStatus;
 }

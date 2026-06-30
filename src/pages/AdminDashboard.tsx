@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
 import { useIssueStore } from '../store/useIssueStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { issueService } from '../services/issueService';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { ShieldAlert, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
+import { CheckCircle2, FolderOpen, Brain, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Spinner } from '../components/ui/Loading';
 
 export const AdminDashboard: React.FC = () => {
-  const { issues, loading, subscribeToIssues, updateIssueStatus } = useIssueStore();
+  const { issues, loading, subscribeToIssues } = useIssueStore();
   const { user } = useAuthStore();
 
   useEffect(() => {
@@ -18,13 +19,29 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [subscribeToIssues, user?.societyId]);
 
-  const needsReview = issues.filter(i => i.status === 'Reported');
-  const critical = issues.filter(i => i.aiAnalysis?.severity === 'Critical' && i.status !== 'Resolved');
-  const assigned = issues.filter(i => i.status === 'Assigned' || i.status === 'In Progress');
-  const resolved = issues.filter(i => i.status === 'Resolved' || i.status === 'Closed');
+  const openIssuesCount = issues.filter(i =>
+    i.status === 'Reported' ||
+    i.status === 'Verified' ||
+    i.status === 'Assigned' ||
+    i.status === 'In Progress'
+  ).length;
 
-  const handleAcceptPlan = (issueId: string, committee?: string) => {
-    updateIssueStatus(issueId, 'Assigned', committee);
+  const resolvedCount = issues.filter(i => i.status === 'Resolved').length;
+
+  const completedAnalyses = issues.filter(i => i.aiAnalysis?.analysisStatus === 'completed' && typeof i.aiAnalysis?.confidence === 'number');
+  const avgConfidence = completedAnalyses.length > 0
+    ? Math.round(completedAnalyses.reduce((acc, curr) => acc + (curr.aiAnalysis?.confidence ?? 0), 0) / completedAnalyses.length)
+    : null;
+
+  const pendingAiReviewCount = issues.filter(i => i.aiAnalysis?.analysisStatus !== 'completed').length;
+
+  const handleAcceptPlan = async (issueId: string, committee?: string) => {
+    if (!user) return;
+    try {
+      await issueService.acceptAIPlan(issueId, user.userId, committee || 'Maintenance');
+    } catch (err) {
+      console.error('Failed to accept AI plan:', err);
+    }
   };
 
   if (loading) {
@@ -42,34 +59,63 @@ export const AdminDashboard: React.FC = () => {
         <p className="mt-1 text-sm text-gray-500">Manage community operations and track issue resolution.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex items-center gap-2 text-amber-600 mb-2">
-            <Clock className="w-5 h-5" />
-            <span className="font-semibold text-sm">Needs Review</span>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {/* ① Open Issues */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200/60 shadow-soft transition-all duration-200 ease-in-out hover:shadow-hover hover:scale-[1.004] hover:border-gray-200 h-full flex flex-col justify-between min-h-[140px]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Open Issues</span>
+            <div className="p-2 rounded-full bg-blue-50 text-blue-600 select-none">
+              <FolderOpen className="w-5 h-5" />
+            </div>
           </div>
-          <span className="text-3xl font-bold">{needsReview.length}</span>
+          <div className="mt-4">
+            <span className="text-3xl font-extrabold text-gray-900 leading-none">{openIssuesCount}</span>
+            <p className="text-[10px] text-gray-400 mt-1 select-none font-medium">Requires committee attention</p>
+          </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex items-center gap-2 text-red-600 mb-2">
-            <ShieldAlert className="w-5 h-5" />
-            <span className="font-semibold text-sm">Critical Issues</span>
+
+        {/* ② Resolved */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200/60 shadow-soft transition-all duration-200 ease-in-out hover:shadow-hover hover:scale-[1.004] hover:border-gray-200 h-full flex flex-col justify-between min-h-[140px]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Resolved</span>
+            <div className="p-2 rounded-full bg-green-50 text-green-600 select-none">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
           </div>
-          <span className="text-3xl font-bold">{critical.length}</span>
+          <div className="mt-4">
+            <span className="text-3xl font-extrabold text-gray-900 leading-none">{resolvedCount}</span>
+            <p className="text-[10px] text-gray-400 mt-1 select-none font-medium">Successfully completed</p>
+          </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex items-center gap-2 text-blue-600 mb-2">
-            <AlertTriangle className="w-5 h-5" />
-            <span className="font-semibold text-sm">Assigned</span>
+
+        {/* ③ Average AI Confidence */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200/60 shadow-soft transition-all duration-200 ease-in-out hover:shadow-hover hover:scale-[1.004] hover:border-gray-200 h-full flex flex-col justify-between min-h-[140px]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Avg AI Confidence</span>
+            <div className="p-2 rounded-full bg-purple-50 text-purple-600 select-none">
+              <Brain className="w-5 h-5" />
+            </div>
           </div>
-          <span className="text-3xl font-bold">{assigned.length}</span>
+          <div className="mt-4">
+            <span className="text-3xl font-extrabold text-gray-900 leading-none">
+              {avgConfidence !== null ? `${avgConfidence}%` : '—'}
+            </span>
+            <p className="text-[10px] text-gray-400 mt-1 select-none font-medium">Across completed analyses</p>
+          </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex items-center gap-2 text-green-600 mb-2">
-            <CheckCircle2 className="w-5 h-5" />
-            <span className="font-semibold text-sm">Resolved</span>
+
+        {/* ④ Pending AI Review */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200/60 shadow-soft transition-all duration-200 ease-in-out hover:shadow-hover hover:scale-[1.004] hover:border-gray-200 h-full flex flex-col justify-between min-h-[140px]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Pending AI Review</span>
+            <div className="p-2 rounded-full bg-amber-50 text-amber-600 select-none">
+              <Sparkles className="w-5 h-5" />
+            </div>
           </div>
-          <span className="text-3xl font-bold">{resolved.length}</span>
+          <div className="mt-4">
+            <span className="text-3xl font-extrabold text-gray-900 leading-none">{pendingAiReviewCount}</span>
+            <p className="text-[10px] text-gray-400 mt-1 select-none font-medium">Awaiting AI processing</p>
+          </div>
         </div>
       </div>
 
@@ -79,7 +125,15 @@ export const AdminDashboard: React.FC = () => {
         </div>
         <div className="overflow-x-auto">
           {issues.length === 0 ? (
-            <p className="p-8 text-center text-sm text-gray-500">No issues reported yet.</p>
+            <div className="max-w-md mx-auto rounded-2xl border border-gray-200/60 bg-white shadow-soft p-8 text-center animate-in fade-in duration-300 transition-all duration-200 hover:shadow-hover hover:scale-[1.004] hover:border-gray-200 my-8">
+              <div className="h-14 w-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-blue-50 text-blue-600 select-none">
+                <FolderOpen className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">No Pending Issues</h3>
+              <p className="mt-2 text-sm text-gray-500 max-w-xs mx-auto leading-relaxed">
+                Great! All reported issues have been reviewed.
+              </p>
+            </div>
           ) : (
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">

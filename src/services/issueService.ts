@@ -33,7 +33,7 @@ export const issueService = {
     const issueRef = doc(collection(db, 'issues'));
     const issueId = issueRef.id;
 
-    const newIssue: Issue = {
+    const newIssue: any = {
       issueId,
       societyId: issueData.societyId,
       reportedBy: issueData.reportedBy || 'unknown',
@@ -42,6 +42,8 @@ export const issueService = {
       imageUrl: issueData.imageUrl || '',
       description: issueData.description || '',
       locationLabel: issueData.locationLabel || 'Unknown Location',
+      address: (issueData as any).address || '',
+      landmark: (issueData as any).landmark || '',
       voteCount: 0,
       commentCount: 0,
       aiAnalysis: { analysisStatus: 'processing' } as Issue['aiAnalysis'],

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { issueService } from '../services/issueService';
@@ -6,19 +6,71 @@ import { aiService } from '../services/aiService';
 import { storageService } from '../services/storageService';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
-import { Camera, Image as ImageIcon, ArrowRight, AlertCircle } from 'lucide-react';
+import { Camera, Image as ImageIcon, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { AIAnalysisCard } from '../components/ai/AIAnalysisCard';
 import { AIAnalysis } from '../types';
+
+const LOADING_STEPS = [
+  "🧠 Detecting issue from image...",
+  "🔍 Identifying category...",
+  "⚡ Estimating severity...",
+  "🏢 Finding responsible committee...",
+  "📋 Preparing action plan...",
+  "✅ Finalizing AI response..."
+];
 
 export const ReportIssue: React.FC = () => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [aiStatusMessage, setAiStatusMessage] = useState('');
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [pendingAnalysis, setPendingAnalysis] = useState<AIAnalysis | null>(null);
+  const [loadingStepIndex, setLoadingStepIndex] = useState(0);
+  const [opacity, setOpacity] = useState(1);
   const [analysisResult, setAnalysisResult] = useState<AIAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [createdIssueId, setCreatedIssueId] = useState<string | null>(null);
+  const [description, setDescription] = useState('');
+  const [address, setAddress] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [validationErr, setValidationErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showSuccessCard || !pendingAnalysis) return;
+
+    const timer = setTimeout(() => {
+      setAnalysisResult(pendingAnalysis);
+      setPendingAnalysis(null);
+      setShowSuccessCard(false);
+      setIsProcessing(false);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [showSuccessCard, pendingAnalysis]);
+
+  useEffect(() => {
+    if (!isProcessing) {
+      setLoadingStepIndex(0);
+      setOpacity(1);
+      return;
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const intervalId = setInterval(() => {
+      setOpacity(0);
+      timeoutId = setTimeout(() => {
+        setLoadingStepIndex((prev) => (prev + 1) % LOADING_STEPS.length);
+        setOpacity(1);
+      }, 200);
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isProcessing]);
 
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -35,59 +87,42 @@ export const ReportIssue: React.FC = () => {
 
   const handleProcessAI = async () => {
     if (!imageFile || !user) return;
+
+    if (!address.trim()) {
+      setValidationErr('Address is required');
+      return;
+    }
+
     setIsProcessing(true);
     setAnalysisError(null);
     setStep(3);
 
-    let intervalRef: ReturnType<typeof setInterval> | null = null;
-
     try {
-      setAiStatusMessage('Creating issue...');
       const newIssueId = await issueService.createIssue({
         societyId: user.societyId,
         reportedBy: user.userId,
         imageUrl: '',
-        locationLabel: 'Auto-detected location',
-      });
+        locationLabel: landmark || 'Manual location',
+        description: description,
+        address: address,
+        landmark: landmark,
+      } as any);
       setCreatedIssueId(newIssueId);
 
-      setAiStatusMessage('Uploading...');
       const imageUrl = await storageService.uploadImage(imageFile, user.societyId, newIssueId);
       await issueService.updateIssueImage(newIssueId, imageUrl);
-
-      setAiStatusMessage('Analyzing Image...');
-
-      // Rotate status messages while AI processes
-      const statuses = ['Detecting Issue...', 'Estimating Severity...', 'Generating Resolution Plan...'];
-      let i = 0;
-      intervalRef = setInterval(() => {
-        if (i < statuses.length) {
-          setAiStatusMessage(statuses[i]);
-          i++;
-        } else {
-          clearInterval(intervalRef!);
-        }
-      }, 2000);
 
       console.log('[ReportIssue] 4 Converting to base64...');
       const base64 = await storageService.fileToBase64(imageFile);
       console.log('[ReportIssue] Calling AI...');
-      const analysis = await aiService.analyzeIssue(newIssueId, base64, '', imageFile.type);
+      const analysis = await aiService.analyzeIssue(newIssueId, base64, description, imageFile.type, address, landmark);
       console.log('[ReportIssue] 6 AI returned:', analysis);
 
-      clearInterval(intervalRef);
-      intervalRef = null;
-      setAiStatusMessage('Done');
-      setAnalysisResult(analysis);
+      setPendingAnalysis(analysis);
+      setShowSuccessCard(true);
     } catch (error) {
       console.error('[ReportIssue] Error processing AI:', error);
-      if (intervalRef) {
-        clearInterval(intervalRef);
-        intervalRef = null;
-      }
-      setAiStatusMessage('');
       setAnalysisError('AI analysis failed. Please check your connection and try again.');
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -101,7 +136,8 @@ export const ReportIssue: React.FC = () => {
     setStep(2);
     setAnalysisError(null);
     setAnalysisResult(null);
-    setAiStatusMessage('');
+    setPendingAnalysis(null);
+    setShowSuccessCard(false);
   };
 
   return (
@@ -147,6 +183,55 @@ export const ReportIssue: React.FC = () => {
             </button>
           </div>
 
+          <div className="space-y-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Describe the issue in detail..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Address <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={address}
+                onChange={e => {
+                  setAddress(e.target.value);
+                  if (e.target.value.trim()) setValidationErr(null);
+                }}
+                placeholder="Enter the complete location of the issue"
+                rows={3}
+                className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 transition-shadow resize-none ${
+                  validationErr 
+                    ? 'border-red-500 focus:ring-red-200 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-indigo-500/20 focus:border-indigo-500'
+                }`}
+              />
+              {validationErr && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-in slide-in-from-top-1 duration-200">
+                  <AlertCircle className="w-3.5 h-3.5" /> {validationErr}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Landmark (Optional)</label>
+              <input
+                type="text"
+                value={landmark}
+                onChange={e => setLandmark(e.target.value)}
+                placeholder="Nearby landmark (optional)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow"
+              />
+            </div>
+          </div>
+
           <Button onClick={handleProcessAI} className="w-full h-12 text-lg">
             Analyze Issue with AI <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
@@ -156,13 +241,42 @@ export const ReportIssue: React.FC = () => {
       {step === 3 && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {isProcessing ? (
-            <Card className="bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-100 py-12">
-              <CardContent className="flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                <h3 className="text-xl font-semibold text-gray-900">{aiStatusMessage}</h3>
-                <p className="text-sm text-gray-500">Please wait while Gemini processes the image.</p>
-              </CardContent>
-            </Card>
+            showSuccessCard ? (
+              <Card className="bg-gradient-to-br from-green-50/50 to-emerald-50/30 border-green-100 py-12 text-center animate-in fade-in duration-300">
+                <style>{`
+                  @keyframes progress-fill {
+                    from { width: 0%; }
+                    to { width: 100%; }
+                  }
+                  .animate-progress-fill {
+                    animation: progress-fill 800ms linear forwards;
+                  }
+                `}</style>
+                <CardContent className="flex flex-col items-center justify-center">
+                  <div className="h-16 w-16 rounded-full bg-green-50 text-green-600 flex items-center justify-center mx-auto mb-4 shadow-sm select-none">
+                    <CheckCircle2 className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">AI Analysis Complete</h3>
+                  <p className="text-sm text-gray-500 mt-2">Generating your civic resolution plan...</p>
+                  <div className="w-full max-w-xs mx-auto bg-green-100 rounded-full h-1 mt-6 overflow-hidden shadow-inner">
+                    <div className="h-full bg-green-600 rounded-full animate-progress-fill" />
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-100 py-12">
+                <CardContent className="flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <h3 
+                    className="text-xl font-semibold text-gray-900 transition-opacity duration-200"
+                    style={{ opacity }}
+                  >
+                    {LOADING_STEPS[loadingStepIndex]}
+                  </h3>
+                  <p className="text-sm text-gray-500">Please wait while Gemini processes the image.</p>
+                </CardContent>
+              </Card>
+            )
           ) : analysisError ? (
             /* Error State — previously this was an infinite spinner */
             <Card className="border-red-200 bg-red-50">
