@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><img src="public\landing page.png" alt="logo" width="32"> CivicPulse AI</h1>
+<h1><img src="public\landing page.png" alt="logo" width="64"> CivicPulse AI</h1>
 
 <p>
   <strong>An AI-assisted civic issue platform for apartment societies.</strong><br/>
@@ -266,7 +266,7 @@ The Cloud Function retrieves the Gemini API key from Secret Manager at call time
 | | |
 |---|---|
 | **Live Demo** | _https://civicpulse-ai-e8baf.web.app_ |
-| **Demo Video** | _ _ |
+| **Demo Video** | _https://drive.google.com/file/d/1gFpZbDcRSM4UQbu1RvEJCkiqvHA9ZSFc_ |
 | **GitHub Repository** | [github.com/AdityaJaiswal-07/CivicPulse-AI](https://github.com/AdityaJaiswal-07/CivicPulse-AI) |
 
 ---
