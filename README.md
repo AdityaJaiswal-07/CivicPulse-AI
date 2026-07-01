@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><img src="public\landing page.png" alt="logo" width="64"> CivicPulse AI</h1>
+<h1><img src="public\landing page.png" alt="logo" width="48"> CivicPulse AI</h1>
 
 <p>
   <strong>An AI-assisted civic issue platform for apartment societies.</strong><br/>
