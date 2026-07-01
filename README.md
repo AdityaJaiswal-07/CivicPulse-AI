@@ -266,7 +266,7 @@ The Cloud Function retrieves the Gemini API key from Secret Manager at call time
 | | |
 |---|---|
 | **Live Demo** | _https://civicpulse-ai-e8baf.web.app_ |
-| **Demo Video** | _https://drive.google.com/file/d/1gFpZbDcRSM4UQbu1RvEJCkiqvHA9ZSFc_ |
+| **Demo Video** | _https://drive.google.com/file/d/1gFpZbDcRSM4UQbu1RvEJCkiqvHA9ZSFc/view?usp=drivesdk_ |
 | **GitHub Repository** | [github.com/AdityaJaiswal-07/CivicPulse-AI](https://github.com/AdityaJaiswal-07/CivicPulse-AI) |
 
 ---
